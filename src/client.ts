@@ -11,7 +11,11 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { decodeJwt } from "jose";
-import { TransactionType } from "typedb-driver-http";
+import {
+  QueryOptions,
+  TransactionOptions,
+  TransactionType,
+} from "typedb-driver-http";
 
 export class ApiError extends Schema.Class<ApiError>("ApiError")({
   code: Schema.String,
@@ -52,6 +56,15 @@ interface TypeDbConfig {
   password: string;
   url: string;
 }
+
+export type OneShotQueryArgs = {
+  query: string;
+  commit: boolean;
+  databaseName: string;
+  transactionType: TransactionType;
+  transactionOptions?: TransactionOptions;
+  queryOptions?: QueryOptions;
+};
 
 const make = ({ username, password, url }: TypeDbConfig) =>
   Effect.gen(function* () {
@@ -181,6 +194,9 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         },
       );
 
+    const oneShotQuery = (args: OneShotQueryArgs) =>
+      makeMethod("POST", `/v1/query`, Schema.Any, args);
+
     const openTransaction = (
       databaseName: string,
       transactionType: TransactionType,
@@ -224,6 +240,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       commitTransaction,
       rollbackTransaction,
       analyze,
+      oneShotQuery,
     };
   });
 
