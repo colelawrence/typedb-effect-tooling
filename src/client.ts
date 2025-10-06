@@ -1,8 +1,7 @@
+import * as Headers from "@effect/platform/Headers";
 import * as HttpBody from "@effect/platform/HttpBody";
 import * as HttpClient from "@effect/platform/HttpClient";
-import { ResponseError } from "@effect/platform/HttpClientError";
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest";
-import * as HttpIncomingMessage from "@effect/platform/HttpIncomingMessage";
 import { HttpMethod } from "@effect/platform/HttpMethod";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
@@ -131,15 +130,47 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       ),
     );
 
+    /**
+     * Creates a generic HTTP method handler for TypeDB API endpoints.
+     *
+     * This is the core method factory used internally to create all TypeDB API method calls.
+     * It handles authentication, request/response processing, error handling, and response parsing
+     * based on content type.
+     *
+     * Usage example:
+     * ```typescript
+     * const getUserMethod = makeMethod(
+     *   "getUser",
+     *   "GET",
+     *   "/v1/users/john",
+     *   Schema.Struct({ username: Schema.String }),
+     * );
+     *
+     * const createUserMethod = makeMethod(
+     *   "createUser",
+     *   "POST",
+     *   "/v1/users",
+     *   Schema.Void,  // Void used for empty responses
+     *   { username: "john", password: "secret" } // body for POST request
+     * );
+     * ```
+     *
+     * @param name - Human-readable name for the operation (used in tracing/logging)
+     * @param method - HTTP method to use (GET, POST, DELETE, etc.)
+     * @param path - API endpoint path relative to the base URL
+     * @param schema - Effect Schema used to decode and validate the response
+     * @param body - Optional request body object (will be JSON serialized)
+     * @returns An Effect that executes the HTTP request and returns the decoded response
+     *
+     * @throws {TypeDbError} When the API returns an error response or unknown content type
+     * @throws {ParseError} Schema validation errors are converted to defects via Effect.die
+     */
     const makeMethod = <A, I, R, B extends object>(
       name: string,
       method: HttpMethod,
       path: string,
       schema: Schema.Schema<A, I, R>,
       body?: B,
-      getBody: (
-        res: HttpIncomingMessage.HttpIncomingMessage<ResponseError>,
-      ) => Effect.Effect<unknown, ResponseError> = (res) => res.json,
     ) =>
       Effect.gen(function* () {
         // const b = yield* body === undefined
@@ -151,31 +182,45 @@ const make = ({ username, password, url }: TypeDbConfig) =>
             Effect.succeed(undefined),
           ),
         );
-        return yield* http
-          .execute(
-            HttpClientRequest.make(method)(new URL(path, url), {
-              body: b,
-            }),
-          )
-          .pipe(
-            Effect.flatMap(getBody),
-            Effect.flatMap((x) =>
-              Schema.decodeUnknown(schema)(x).pipe(
-                Effect.orElse(() =>
-                  Schema.decodeUnknown(ApiError)(x).pipe(
-                    Effect.flatMap(
-                      (e) =>
-                        new TypeDbError({
-                          cause: e,
-                        }),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Effect.catchTag("ParseError", Effect.die),
+        const res = yield* http.execute(
+          HttpClientRequest.make(method)(new URL(path, url), {
+            body: b,
+          }),
+        );
+        if (res.status !== 200) {
+          const error = yield* res.json.pipe(
+            Effect.flatMap(Schema.decodeUnknown(ApiError)),
           );
-      }).pipe(Effect.withSpan(`TypeDb: ${name}`));
+          return yield* new TypeDbError({
+            cause: error,
+          });
+        }
+        const contentType = Headers.get(res.headers, "content-type");
+
+        // NOTE: When TypeDB doesn't return a content-type, it's an empty "OK" response
+        // In those cases we have passed a Schema.Void,
+        if (Option.isNone(contentType)) {
+          return yield* res.json.pipe(
+            Effect.flatMap(Schema.decodeUnknown(schema)),
+          );
+        }
+
+        if (contentType.value.startsWith("text/plain")) {
+          return yield* res.text.pipe(
+            Effect.flatMap(Schema.decodeUnknown(schema)),
+          );
+        } else if (contentType.value.startsWith("application/json")) {
+          return yield* res.json.pipe(
+            Effect.flatMap(Schema.decodeUnknown(schema)),
+          );
+        }
+        return yield* new TypeDbError({
+          cause: `Unknown content type: ${contentType.value}`,
+        });
+      }).pipe(
+        Effect.catchTag("ParseError", Effect.die),
+        Effect.withSpan(`TypeDb: ${name}`),
+      );
 
     const oneShotQuery = (args: OneShotQueryArgs) =>
       makeMethod("oneShotQuery", "POST", `/v1/query`, Schema.Any, args);
@@ -211,7 +256,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         "closeTransaction",
         "POST",
         `/v1/transactions/${transactionId}/close`,
-        Schema.Null,
+        Schema.Void,
       );
 
     const commitTransaction = (transactionId: string) =>
@@ -219,7 +264,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         "commitTransaction",
         "POST",
         `/v1/transactions/${transactionId}/commit`,
-        Schema.Null,
+        Schema.Void,
       );
 
     const rollbackTransaction = (transactionId: string) =>
@@ -227,7 +272,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         "rollbackTransaction",
         "POST",
         `/v1/transactions/${transactionId}/rollback`,
-        Schema.Null,
+        Schema.Void,
       );
 
     const openTransactionScoped = (dbName: string, txType: TransactionType) =>
@@ -282,7 +327,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         "createDatabase",
         "POST",
         `/v1/databases/${databaseName}`,
-        Schema.Null,
+        Schema.Void,
       );
 
     const deleteDatabase = (databaseName: string) =>
@@ -290,7 +335,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         "deleteDatabase",
         "DELETE",
         `/v1/databases/${databaseName}`,
-        Schema.Null,
+        Schema.Void,
       );
 
     const createDatabaseScoped = (dbName: string) =>
@@ -307,8 +352,6 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         "GET",
         `/v1/databases/${databaseName}/schema`,
         Schema.String,
-        undefined,
-        (res) => res.text,
       );
     const getDatabaseTypeSchema = (databaseName: string) =>
       makeMethod(
@@ -316,8 +359,6 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         "GET",
         `/v1/databases/${databaseName}/type-schema`,
         Schema.String,
-        undefined,
-        (res) => res.text,
       );
 
     return {

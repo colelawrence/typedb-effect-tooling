@@ -2,7 +2,6 @@ import Crypto from "node:crypto";
 
 import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as Array from "effect/Array";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -18,8 +17,19 @@ const queries = [
   define
   relation parentship, relates person, relates person;
   relation childship, relates person, relates person;
-
     `,
+  `
+  define
+  entity child sub person;
+  entity parent sub person;
+    `,
+  // `
+  // define
+  // entity child sub person;
+  // entity parent sub person;
+  // parent plays parentship:parent;
+  // child plays parentship:child;
+  //     `,
 ];
 
 const MainLive = Layer.mergeAll(
@@ -48,16 +58,17 @@ export const migrator = Effect.fn("migrator")(
     // const dbName = `test-${Crypto.randomBytes(8).toString("hex")}`;
     const dbName = "test-db";
     yield* Effect.logInfo(`Creating database`, dbName);
-    const database = yield* client.createDatabase(dbName);
+    yield* client.createDatabase(dbName);
     const { transactionId } = yield* client.openTransaction(dbName, "schema");
 
     for (const migration of queries) {
       const hash = Crypto.createHash("sha256").update(migration).digest("hex");
       yield* Effect.logInfo(`Running migration ${hash}`);
-      yield* client.query({
+      const res = yield* client.query({
         transactionId,
         query: migration,
       });
+      yield* Effect.logInfo(res);
     }
     yield* client.commitTransaction(transactionId);
     const schema = yield* client.getDatabaseSchema(dbName);
