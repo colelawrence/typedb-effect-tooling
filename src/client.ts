@@ -18,6 +18,7 @@ import { decodeJwt } from "jose";
 import {
   AnalyzeResponse,
   QueryOptions,
+  QueryResponse,
   TransactionOptions,
   TransactionType,
 } from "typedb-driver-http";
@@ -182,9 +183,6 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       body?: B,
     ) =>
       Effect.gen(function* () {
-        // const b = yield* body === undefined
-        //   ? Effect.succeed(undefined)
-        //   : HttpBody.json(body);
         const b = yield* Option.fromNullable(body).pipe(
           Effect.flatMap(HttpBody.json),
           Effect.catchTag("NoSuchElementException", () =>
@@ -235,14 +233,24 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         Effect.withSpan(`TypeDb: ${name}`),
       );
 
-    const oneShotQuery = (args: OneShotQueryArgs) =>
-      makeMethod("oneShotQuery", "POST", `/v1/query`, Schema.Any, args);
+    const oneShotQuery = (
+      args: OneShotQueryArgs,
+    ): Effect.Effect<
+      QueryResponse,
+      | HttpClientError.HttpClientError
+      | HttpBody.HttpBodyError
+      | SyntaxApiError
+      | GenericApiError
+      | TypeDbError,
+      never
+    > =>
+      makeMethod("oneShotQuery", "POST", apiPath`/v1/query`, Schema.Any, args);
 
     const query = ({ transactionId, ...rest }: QueryArgs) =>
       makeMethod(
         "query",
         "POST",
-        `/v1/transactions/${transactionId}/query`,
+        apiPath`/v1/transactions/${transactionId}/query`,
         Schema.Any,
         rest,
       );
@@ -254,7 +262,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       makeMethod(
         "openTransaction",
         "POST",
-        `/v1/transactions/open`,
+        apiPath`/v1/transactions/open`,
         Schema.Struct({
           transactionId: Schema.String,
         }),
@@ -268,7 +276,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       makeMethod(
         "closeTransaction",
         "POST",
-        `/v1/transactions/${transactionId}/close`,
+        apiPath`/v1/transactions/${transactionId}/close`,
         Schema.Void,
       );
 
@@ -276,7 +284,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       makeMethod(
         "commitTransaction",
         "POST",
-        `/v1/transactions/${transactionId}/commit`,
+        apiPath`/v1/transactions/${transactionId}/commit`,
         Schema.Void,
       );
 
@@ -284,7 +292,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       makeMethod(
         "rollbackTransaction",
         "POST",
-        `/v1/transactions/${transactionId}/rollback`,
+        apiPath`/v1/transactions/${transactionId}/rollback`,
         Schema.Void,
       );
 
@@ -322,7 +330,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       makeMethod(
         "analyze",
         "POST",
-        `/v1/transactions/${transactionId}/analyze`,
+        apiPath`/v1/transactions/${transactionId}/analyze`,
         Schema.Any,
         {
           query,
@@ -332,7 +340,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
     const getCurrentUser = makeMethod(
       "getCurrentUser",
       "GET",
-      `/v1/users/${username}`,
+      apiPath`/v1/users/${username}`,
       Schema.Struct({
         username: Schema.String,
       }),
@@ -341,7 +349,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
     const getDatabases = makeMethod(
       "getDatabases",
       "GET",
-      `/v1/databases`,
+      apiPath`/v1/databases`,
       Schema.Struct({
         databases: Schema.Array(
           Schema.Struct({
@@ -355,7 +363,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       makeMethod(
         "createDatabase",
         "POST",
-        `/v1/databases/${databaseName}`,
+        apiPath`/v1/databases/${databaseName}`,
         Schema.Void,
       );
 
@@ -363,7 +371,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       makeMethod(
         "deleteDatabase",
         "DELETE",
-        `/v1/databases/${databaseName}`,
+        apiPath`/v1/databases/${databaseName}`,
         Schema.Void,
       );
 
@@ -379,14 +387,15 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       makeMethod(
         "getDatabaseSchema",
         "GET",
-        `/v1/databases/${databaseName}/schema`,
+        apiPath`/v1/databases/${databaseName}/schema`,
         Schema.String,
       );
+
     const getDatabaseTypeSchema = (databaseName: string) =>
       makeMethod(
         "getDatabaseTypeSchema",
         "GET",
-        `/v1/databases/${databaseName}/type-schema`,
+        apiPath`/v1/databases/${databaseName}/type-schema`,
         Schema.String,
       );
 
@@ -431,3 +440,15 @@ export class TypeDb extends Context.Tag("TypeDb")<TypeDb, TypeDbDefinition>() {
     }),
   );
 }
+
+/**
+ * URI-encode API paths
+ *
+ * Example:
+ *
+ * apiPath`/v1/databases/${databaseName}/schema`
+ */
+const apiPath = (
+  template: TemplateStringsArray,
+  ...args: (string | number)[]
+) => String.raw(template, ...args.map((a) => encodeURIComponent(String(a))));
