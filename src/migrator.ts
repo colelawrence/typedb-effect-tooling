@@ -1,7 +1,7 @@
 import Crypto from "node:crypto";
 
 import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import { BunRuntime } from "@effect/platform-bun";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -39,16 +39,6 @@ const MainLive = Layer.mergeAll(
     url: "http://localhost:8000",
   }).pipe(Layer.provide(FetchHttpClient.layer)),
 );
-const cleanup = Effect.gen(function* () {
-  const client = yield* TypeDb;
-  const dbs = yield* client.getDatabases;
-  for (const db of dbs.databases) {
-    if (db.name === "default") continue;
-
-    yield* Effect.logWarning(`Deleting database ${db.name}`);
-    yield* client.deleteDatabase(db.name);
-  }
-});
 
 export const migrator = Effect.fn("migrator")(
   function* () {
@@ -81,4 +71,4 @@ export const migrator = Effect.fn("migrator")(
   Effect.provide(MainLive),
 );
 
-NodeRuntime.runMain(migrator().pipe(Effect.provide(TelemetryLive)));
+BunRuntime.runMain(migrator().pipe(Effect.provide(TelemetryLive)));
