@@ -1,6 +1,7 @@
 import * as Headers from "@effect/platform/Headers";
 import * as HttpBody from "@effect/platform/HttpBody";
 import * as HttpClient from "@effect/platform/HttpClient";
+import * as HttpClientError from "@effect/platform/HttpClientError";
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest";
 import { HttpMethod } from "@effect/platform/HttpMethod";
 import * as Cache from "effect/Cache";
@@ -9,26 +10,36 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Match from "effect/Match";
 import * as Option from "effect/Option";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import { decodeJwt } from "jose";
 import {
+  AnalyzeResponse,
   QueryOptions,
   TransactionOptions,
   TransactionType,
 } from "typedb-driver-http";
 
-export class ApiError extends Schema.Class<ApiError>("ApiError")({
+import { AppFileConfig } from "./config";
+
+export class GenericApiError extends Schema.Class<GenericApiError>(
+  "GenericApiError",
+)({
   code: Schema.String,
   message: Schema.String,
 }) {}
 
-export class ApiErrorResponse extends Schema.Class<ApiErrorResponse>(
-  "ApiErrorResponse",
-)({
-  err: ApiError,
-  status: Schema.Number,
-}) {}
+export class SyntaxApiError extends Schema.Class<SyntaxApiError>("SyntaxError")(
+  {
+    code: Schema.Literal("TQL0"),
+    message: Schema.String,
+  },
+) {}
+
+export const ApiError = Schema.Union(SyntaxApiError, GenericApiError);
+export type ApiError = typeof ApiError.Type;
 
 export class TypeDbError extends Schema.TaggedError<TypeDbError>()(
   "TypeDbError",
@@ -52,7 +63,7 @@ export class DecodedToken extends Schema.Class<DecodedToken>("DecodedToken")({
 interface TypeDbConfig {
   username: string;
   password: string;
-  url: string;
+  url: string | URL;
 }
 
 export type OneShotQueryArgs = {
@@ -189,9 +200,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
           const error = yield* res.json.pipe(
             Effect.flatMap(Schema.decodeUnknown(ApiError)),
           );
-          return yield* new TypeDbError({
-            cause: error,
-          });
+          return yield* Effect.fail(error);
         }
         const contentType = Headers.get(res.headers, "content-type");
 
@@ -203,18 +212,24 @@ const make = ({ username, password, url }: TypeDbConfig) =>
           );
         }
 
-        if (contentType.value.startsWith("text/plain")) {
-          return yield* res.text.pipe(
-            Effect.flatMap(Schema.decodeUnknown(schema)),
-          );
-        } else if (contentType.value.startsWith("application/json")) {
-          return yield* res.json.pipe(
-            Effect.flatMap(Schema.decodeUnknown(schema)),
-          );
-        }
-        return yield* new TypeDbError({
-          cause: `Unknown content type: ${contentType.value}`,
-        });
+        return yield* Match.value(contentType.value).pipe(
+          Match.when(
+            (s) => s.startsWith("text/plain"),
+            () => res.text,
+          ),
+          Match.when(
+            (s) => s.startsWith("application/json"),
+            () => res.json,
+          ),
+          Match.orElse(() =>
+            Effect.fail(
+              new TypeDbError({
+                cause: `Unknown content type: ${contentType.value}`,
+              }),
+            ),
+          ),
+          Effect.flatMap(Schema.decodeUnknown(schema)),
+        );
       }).pipe(
         Effect.catchTag("ParseError", Effect.die),
         Effect.withSpan(`TypeDb: ${name}`),
@@ -279,7 +294,13 @@ const make = ({ username, password, url }: TypeDbConfig) =>
           onFailure: () =>
             closeTransaction(tx.transactionId).pipe(Effect.orDie),
           onSuccess: () =>
-            commitTransaction(tx.transactionId).pipe(Effect.orDie),
+            Match.value(txType).pipe(
+              Match.when("read", () => closeTransaction(tx.transactionId)),
+              Match.when("write", () => commitTransaction(tx.transactionId)),
+              Match.when("schema", () => commitTransaction(tx.transactionId)),
+              Match.exhaustive,
+              Effect.orDie,
+            ),
         }),
       ).pipe(
         Effect.annotateSpans({
@@ -287,7 +308,17 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         }),
       );
 
-    const analyze = (transactionId: string, query: string) =>
+    const analyze = (
+      transactionId: string,
+      query: string,
+    ): Effect.Effect<
+      AnalyzeResponse,
+      | HttpClientError.HttpClientError
+      | HttpBody.HttpBodyError
+      | TypeDbError
+      | SyntaxApiError
+      | GenericApiError
+    > =>
       makeMethod(
         "analyze",
         "POST",
@@ -388,4 +419,15 @@ export class TypeDb extends Context.Tag("TypeDb")<TypeDb, TypeDbDefinition>() {
   static make = make;
   static layer = (config: TypeDbConfig) =>
     Layer.effect(this, this.make(config));
+  static fromFileConfig = Layer.effect(
+    this,
+    Effect.gen(function* () {
+      const cfg = yield* AppFileConfig;
+      return yield* make({
+        url: cfg.typedb_url,
+        username: cfg.typedb_username,
+        password: Redacted.value(cfg.typedb_password),
+      });
+    }),
+  );
 }
