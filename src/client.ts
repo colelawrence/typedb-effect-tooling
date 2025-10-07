@@ -63,7 +63,7 @@ export class DecodedToken extends Schema.Class<DecodedToken>("DecodedToken")({
 
 interface TypeDbConfig {
   username: string;
-  password: string;
+  password: Redacted.Redacted<string>;
   url: string | URL;
 }
 
@@ -95,7 +95,7 @@ const make = ({ username, password, url }: TypeDbConfig) =>
           .post(new URL("/v1/signin", url), {
             body: yield* HttpBody.json({
               username,
-              password,
+              password: Redacted.value(password),
             }),
           })
           .pipe(
@@ -194,7 +194,8 @@ const make = ({ username, password, url }: TypeDbConfig) =>
             body: b,
           }),
         );
-        if (res.status !== 200) {
+
+        if (!(200 <= res.status && res.status < 300)) {
           const error = yield* res.json.pipe(
             Effect.flatMap(Schema.decodeUnknown(ApiError)),
           );
@@ -399,6 +400,13 @@ const make = ({ username, password, url }: TypeDbConfig) =>
         Schema.String,
       );
 
+    const health = makeMethod(
+      "health",
+      "GET",
+      apiPath`/v1/health`,
+      Schema.Void,
+    );
+
     return {
       authenticate,
       getCurrentUser,
@@ -419,6 +427,8 @@ const make = ({ username, password, url }: TypeDbConfig) =>
       analyze,
       oneShotQuery,
       query,
+
+      health,
     };
   });
 
@@ -435,7 +445,7 @@ export class TypeDb extends Context.Tag("TypeDb")<TypeDb, TypeDbDefinition>() {
       return yield* make({
         url: cfg.typedb_http_url,
         username: cfg.typedb_username,
-        password: Redacted.value(cfg.typedb_password),
+        password: cfg.typedb_password,
       });
     }),
   );
@@ -451,4 +461,3 @@ export class TypeDb extends Context.Tag("TypeDb")<TypeDb, TypeDbDefinition>() {
 const apiPath = (
   template: TemplateStringsArray,
   ...args: (string | number)[]
-) => String.raw(template, ...args.map((a) => encodeURIComponent(String(a))));

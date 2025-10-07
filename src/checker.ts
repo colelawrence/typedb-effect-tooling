@@ -3,14 +3,18 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { SyntaxApiError, TypeDb } from "./client";
+import { DatabaseConfig } from "./config";
 
+// @effect-diagnostics-next-line leakingRequirements:off
 export class Checker extends Effect.Service<Checker>()("app/Checker", {
   accessors: true,
   effect: Effect.gen(function* () {
     const client = yield* TypeDb;
     const fs = yield* FileSystem.FileSystem;
     const checkSyntax = Effect.fn("checkSyntax")(function* (code: string) {
-      const tx = yield* client.openTransactionScoped("family", "read");
+      const { databaseName } = yield* DatabaseConfig;
+      const tx = yield* client.openTransactionScoped(databaseName, "read");
+      yield* Effect.logWarning(`Using database '${databaseName}'`);
       const result = yield* client
         .analyze(tx.transactionId, code)
         .pipe(

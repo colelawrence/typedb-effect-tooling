@@ -1,0 +1,5 @@
+typedb_http_url: "http://localhost:8000"
+typedb_username: "admin"
+typedb_password: "password"
+schemas:
+  - schema.tql
