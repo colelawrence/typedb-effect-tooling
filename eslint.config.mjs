@@ -13,10 +13,8 @@ export default defineConfig([
   // Import sorting
   {
     files: ["**/*.{ts,tsx,js,jsx}"],
-    ignores: ["frontend/**/components/ui/**"],
     plugins: {
       "simple-import-sort": simpleImportSort,
-      // import: importPlugin,
     },
     rules: {
       "simple-import-sort/imports": [
@@ -33,8 +31,6 @@ export default defineConfig([
             // Absolute imports and other imports such as Vue-style `@/foo`.
             // Anything not matched in another group.
             ["^"],
-            // Group @saga packages separately
-            ["^@saga.*"],
             // Relative imports.
             // Anything that starts with a dot.
             ["^\\."],
@@ -53,24 +49,6 @@ export default defineConfig([
       "@typescript-eslint/no-empty-object-type": "off",
       "no-empty-pattern": "off",
       "require-yield": "off",
-    },
-  },
-  {
-    files: ["backend/test/**/*.ts"],
-    ignores: ["backend/test/setup.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            {
-              name: "@saga/database/client",
-              importNames: ["Db"],
-              message: "Don't use `Db` directly. Use `TestDb` instead.",
-            },
-          ],
-        },
-      ],
     },
   },
 ]);
