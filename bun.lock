@@ -7,6 +7,7 @@
         "@effect/opentelemetry": "catalog:effect",
         "@effect/platform": "catalog:effect",
         "@effect/platform-bun": "catalog:effect",
+        "@effect/printer-ansi": "catalog:effect",
         "@opentelemetry/exporter-trace-otlp-http": "^0.205.0",
         "@opentelemetry/sdk-trace-base": "^2.1.0",
         "@opentelemetry/sdk-trace-node": "^2.1.0",
@@ -44,6 +45,7 @@
       "@effect/platform-browser": "0.72.0",
       "@effect/platform-bun": "^0.81.1",
       "@effect/platform-node": "0.98.3",
+      "@effect/printer-ansi": "^0.46.0",
       "@effect/rpc": "0.71.0",
       "@effect/sql": "0.46.0",
       "@effect/sql-drizzle": "0.45.0",
@@ -67,9 +69,15 @@
 
     "@effect/platform-node-shared": ["@effect/platform-node-shared@0.51.4", "", { "dependencies": { "@parcel/watcher": "2.5.1", "multipasta": "0.2.7", "ws": "8.18.3" }, "peerDependencies": { "@effect/cluster": "0.50.3", "@effect/platform": "0.92.1", "@effect/rpc": "0.71.0", "@effect/sql": "0.46.0", "effect": "3.18.2" } }, "sha512-xElU9+cNPa1BnUHAZ3sVVanuuKof8oWQhK7rbyHNqgWM7CZTjv7x9VMDs0X05+1OcTQnnW3E+SrZKIPCfcYlDQ=="],
 
+    "@effect/printer": ["@effect/printer@0.46.0", "", { "peerDependencies": { "@effect/typeclass": "^0.37.0", "effect": "^3.18.0" } }, "sha512-8RbuXDY9ND3M7klt2wCrx4gCDlfecH3bFJl8Co4UenRDiAMa0WoI8GKPqlNA3FonryNYgrMN0TDnk39Yp5GUbQ=="],
+
+    "@effect/printer-ansi": ["@effect/printer-ansi@0.46.0", "", { "dependencies": { "@effect/printer": "^0.46.0" }, "peerDependencies": { "@effect/typeclass": "^0.37.0", "effect": "^3.18.0" } }, "sha512-b+wCoCtmEF/Duobsid2N1JoGvZLiA9Fkcz1G1x/dhXVtsZqaGPa6jNYctopmzBhyuS53kK9XpqnFhEbF6+/5Ug=="],
+
     "@effect/rpc": ["@effect/rpc@0.71.0", "", { "dependencies": { "msgpackr": "1.11.5" }, "peerDependencies": { "@effect/platform": "0.92.1", "effect": "3.18.2" } }, "sha512-m6mFX0ShdA+fnYAyamz7SRKF4FepaDB/ZhBri6iue26tBF2LrOFJUWewbwv8/LdLSedkO4eukhsHXuEYortL/w=="],
 
     "@effect/sql": ["@effect/sql@0.46.0", "", { "dependencies": { "uuid": "11.1.0" }, "peerDependencies": { "@effect/experimental": "0.56.0", "@effect/platform": "0.92.1", "effect": "3.18.2" } }, "sha512-nm9TuTTG7gLmJlIPkf71wA5lXArSvkpm1oYoIF+rhf01wef+1ujz9Mv1SfuzYbzsk7W9+OXUIRMxz/nSlKkiGQ=="],
+
+    "@effect/typeclass": ["@effect/typeclass@0.37.0", "", { "peerDependencies": { "effect": "^3.18.0" } }, "sha512-8PkVWx82gkavYYMDlRV80pM1Ss0dL84wabkho6JjaAuDr+gJKx87N0T6Z+UGroySslsfw1FW1dMibUPH1BXX1w=="],
 
     "@effect/workflow": ["@effect/workflow@0.11.3", "", { "peerDependencies": { "@effect/platform": "0.92.1", "@effect/rpc": "0.71.0", "effect": "3.18.2" } }, "sha512-3uyj0yOc2QRtQVOw6NEJVEMOhN/F7khhnf3QSU+2T3wvuDag9iBUzJFvSls8PgNCO3j/GgeaWzbcXwxqpFQYOQ=="],
 
