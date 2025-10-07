@@ -30,9 +30,6 @@ export class ApiErrorResponse extends Schema.Class<ApiErrorResponse>(
   status: Schema.Number,
 }) {}
 
-const ApiResponse = <A, I, R>(inner: Schema.Schema<A, I, R>) =>
-  Schema.Union(inner, ApiError);
-
 export class TypeDbError extends Schema.TaggedError<TypeDbError>()(
   "TypeDbError",
   {
@@ -75,26 +72,27 @@ export type QueryArgs = {
 
 const make = ({ username, password, url }: TypeDbConfig) =>
   Effect.gen(function* () {
+    // We need a "public" client to do the authentication
     const publicHttp = yield* HttpClient.HttpClient;
-    const authenticate = Effect.fn("TypeDb: signIn")(function* ({
-      username,
-      password,
-    }: Pick<TypeDbConfig, "username" | "password">) {
-      const response = yield* publicHttp.post(new URL("/v1/signin", url), {
-        body: yield* HttpBody.json({
-          username,
-          password,
-        }),
-      });
-      const tokenRes = yield* response.json.pipe(
-        Effect.flatMap(Schema.decodeUnknown(ApiResponse(TokenResponse))),
-      );
-      if ("code" in tokenRes) {
-        return yield* new TypeDbError({ cause: tokenRes });
-      }
-
-      return tokenRes;
-    });
+    const authenticate = Effect.fn("TypeDb: signIn")(
+      function* ({
+        username,
+        password,
+      }: Pick<TypeDbConfig, "username" | "password">) {
+        return yield* publicHttp
+          .post(new URL("/v1/signin", url), {
+            body: yield* HttpBody.json({
+              username,
+              password,
+            }),
+          })
+          .pipe(
+            Effect.flatMap((_) => _.json),
+            Effect.flatMap(Schema.decodeUnknown(TokenResponse)),
+          );
+      },
+      Effect.catchTag("ParseError", Effect.orDie),
+    );
 
     const tokenCache = yield* Cache.makeWith({
       capacity: 1,
