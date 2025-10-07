@@ -1,9 +1,9 @@
 import * as Headers from "@effect/platform/Headers";
 import * as HttpBody from "@effect/platform/HttpBody";
 import * as HttpClient from "@effect/platform/HttpClient";
-import * as HttpClientError from "@effect/platform/HttpClientError";
+import type * as HttpClientError from "@effect/platform/HttpClientError";
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest";
-import { HttpMethod } from "@effect/platform/HttpMethod";
+import type { HttpMethod } from "@effect/platform/HttpMethod";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -15,7 +15,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import { decodeJwt } from "jose";
-import {
+import type {
   AnalyzeResponse,
   QueryOptions,
   QueryResponse,
