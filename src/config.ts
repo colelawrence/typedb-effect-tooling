@@ -8,11 +8,19 @@ import * as Schema from "effect/Schema";
 export class FileConfigSchema extends Schema.Class<FileConfigSchema>(
   "ConfigSchema",
 )({
-  typedb_url: Schema.URL,
+  typedb_http_url: Schema.URL,
   typedb_username: Schema.String,
   typedb_password: Schema.String.pipe(Schema.Redacted),
   schemas: Schema.Array(Schema.String),
 }) {}
+
+export class FileConfigError extends Schema.TaggedError<FileConfigError>()(
+  "FileConfigError",
+  {
+    filePath: Schema.String,
+    cause: Schema.Defect,
+  },
+) {}
 
 export class AppFileConfig extends Context.Tag("AppFileConfig")<
   AppFileConfig,
@@ -22,9 +30,24 @@ export class AppFileConfig extends Context.Tag("AppFileConfig")<
     this,
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const contents = yield* fs.readFileString("typedb.phosphor-config.yaml");
-      const yaml = YAML.parse(contents);
+      // TODO: Add walking up the directory tree to find the config file
+      // - "memoize" AppFileConfig per filePath + lastModifiedTimestamp resolved from a input typedb config file
+      const filePath = "typedb.phosphor-config.yaml";
+      const contents = yield* fs.readFileString(filePath);
+      const yaml = yield* Effect.try({
+        try: () => YAML.parse(contents),
+        catch: (error) => new FileConfigError({ filePath, cause: error }),
+      });
       return yield* Schema.decodeUnknown(FileConfigSchema)(yaml);
-    }),
+    }).pipe(Effect.orDie),
   );
 }
+
+export interface DatabaseConfigDefinition {
+  databaseName: string;
+}
+
+export class DatabaseConfig extends Context.Tag("DatabaseConfig")<
+  DatabaseConfig,
+  DatabaseConfigDefinition
+>() {}

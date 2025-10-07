@@ -424,7 +424,7 @@ export class TypeDb extends Context.Tag("TypeDb")<TypeDb, TypeDbDefinition>() {
     Effect.gen(function* () {
       const cfg = yield* AppFileConfig;
       return yield* make({
-        url: cfg.typedb_url,
+        url: cfg.typedb_http_url,
         username: cfg.typedb_username,
         password: Redacted.value(cfg.typedb_password),
       });
